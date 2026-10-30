@@ -25,7 +25,9 @@ Este documento registra as expansões aprovadas para o projeto. **Estar nesta li
 
 ## Diretrizes mantidas
 
-- Jogo offline como prioridade; multiplayer online não faz parte do escopo atual.
+- **Offline de verdade:** o jogo deve poder ser iniciado e jogado sem internet. Partidas, todos os modos de carreira e gestão, progresso, menus, elencos e conteúdos essenciais devem funcionar localmente, sem exigir login, conexão permanente ou serviços online.
+- **Salvamento local:** progresso e configurações devem ser armazenados no aparelho. Não depender de nuvem; eventual sincronização online futura será opcional e nunca obrigatória.
+- Multiplayer online não faz parte do escopo atual.
 - Dois perfis gráficos: realista e otimizado para celulares.
 - Não incluir simulação autônoma do futebol mundial sem nova aprovação.
 - Desenvolver e testar por etapas, sem anunciar como pronta uma função que ainda não foi implementada.
