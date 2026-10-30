@@ -3,9 +3,7 @@ name: Build Gramado Lendario APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 jobs:
   build-android:
@@ -17,6 +15,30 @@ jobs:
       - name: Baixar codigo
         uses: actions/checkout@v4
 
+      - name: Instalar Java e ferramentas Android
+        run: |
+          apt-get update
+          apt-get install -y openjdk-17-jdk curl unzip
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
+          curl -L --fail -o /tmp/godot-templates.tpz https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+          unzip -o /tmp/godot-templates.tpz -d /tmp/godot-templates
+          cp /tmp/godot-templates/templates/* "$HOME/.local/share/godot/export_templates/4.3.stable/"
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "/usr/lib/android-sdk"
+          export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"
+          export/android/android_debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/android_debug_keystore_user = "androiddebugkey"
+          export/android/android_debug_keystore_pass = "android"
+          EOF
+
       - name: Verificar estrutura do projeto
         run: |
           test -f project.godot
@@ -25,7 +47,7 @@ jobs:
           test -f scripts/virtual_joystick.gd
           test -f export_presets.cfg
 
-      - name: Importar projeto Godot
+      - name: Validar scripts Godot
         run: godot --headless --editor --path . --quit
 
       - name: Exportar APK Android
