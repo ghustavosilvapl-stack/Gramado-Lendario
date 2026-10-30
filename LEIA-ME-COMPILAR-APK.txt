@@ -1,0 +1,17 @@
+COMO GERAR O APK PELO CELULAR (SEM COMPUTADOR)
+
+1. Crie uma conta gratuita em https://github.com/ (se ainda não tiver).
+2. Crie um repositório novo chamado Gramado-Lendario e deixe-o Public.
+3. Extraia este ZIP no celular.
+4. No repositório, use Add file > Upload files e envie TODO o conteúdo de dentro da pasta Gramado_Lendario_3D, incluindo a pasta oculta .github.
+   IMPORTANTE: a pasta .github/workflows/android-apk.yml precisa ficar exatamente nesse caminho no repositório.
+5. Faça Commit changes.
+6. Abra a aba Actions, selecione "Build Gramado Lendario APK" e toque em Run workflow.
+7. Aguarde a execução terminar com sucesso. Abra a execução e baixe o artefato "Gramado-Lendario-APK".
+8. Extraia o artefato baixado para encontrar Gramado_Lendario.apk e instale no Android.
+
+NOTAS
+- O fluxo usa GitHub Actions e uma imagem de compilação Godot 4.3; não exige instalar Godot/SDK no celular.
+- A primeira compilação ainda precisa ser validada. Se falhar, envie a mensagem/log da execução para corrigirmos.
+- O APK é um protótipo inicial, não o jogo completo prometido no escopo.
+- Não compartilhe senhas, tokens ou chaves privadas no chat.

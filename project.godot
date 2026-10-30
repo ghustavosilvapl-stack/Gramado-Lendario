@@ -1,0 +1,28 @@
+; Gramado Lendario - prototipo 3D jogavel
+config_version=5
+
+[application]
+config/name="Gramado Lendario"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.08, 0.13, 0.10, 1)
+
+[input]
+move_forward={"deadzone":0.2,"events":[{"type":"InputEventKey","physical_keycode":87}]}
+move_back={"deadzone":0.2,"events":[{"type":"InputEventKey","physical_keycode":83}]}
+move_left={"deadzone":0.2,"events":[{"type":"InputEventKey","physical_keycode":65}]}
+move_right={"deadzone":0.2,"events":[{"type":"InputEventKey","physical_keycode":68}]}
+pass_ball={"deadzone":0.2,"events":[{"type":"InputEventKey","physical_keycode":74}]}
+shoot_ball={"deadzone":0.2,"events":[{"type":"InputEventKey","physical_keycode":75}]}
+sprint={"deadzone":0.2,"events":[{"type":"InputEventKey","physical_keycode":16}]}
