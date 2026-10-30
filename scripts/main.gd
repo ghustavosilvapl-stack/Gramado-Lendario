@@ -19,6 +19,8 @@ var teammates: Array[CharacterBody3D] = []
 var enemies: Array[CharacterBody3D] = []
 var score_label: Label
 var message_label: Label
+var menu_layer: CanvasLayer
+var match_started := false
 
 func _ready() -> void:
 	build_stadium()
@@ -26,7 +28,107 @@ func _ready() -> void:
 	build_ball()
 	build_camera()
 	build_hud()
+	hud.visible = false
 	set_quality(true)
+	build_main_menu()
+
+
+func build_main_menu() -> void:
+	menu_layer = CanvasLayer.new()
+	menu_layer.layer = 10
+	add_child(menu_layer)
+	var bg := ColorRect.new()
+	bg.color = Color(0.025, 0.055, 0.075, 0.96)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_layer.add_child(bg)
+	var root := VBoxContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 14)
+	root.add_theme_constant_override("margin_left", 34)
+	root.add_theme_constant_override("margin_right", 34)
+	root.add_theme_constant_override("margin_top", 22)
+	root.add_theme_constant_override("margin_bottom", 22)
+	menu_layer.add_child(root)
+	var title := Label.new()
+	title.text = "GRAMADO LENDÁRIO"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 42)
+	root.add_child(title)
+	var subtitle := Label.new()
+	subtitle.text = "FUTEBOL • CARREIRA • GESTÃO • SUA HISTÓRIA"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 16)
+	root.add_child(subtitle)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 10)
+	root.add_child(grid)
+	var modes := [
+		["PARTIDA RÁPIDA", "Jogue uma partida amistosa agora.", true],
+		["CARREIRA DE JOGADOR", "Crie seu atleta, evolua e conquiste seu espaço.", false],
+		["CARREIRA DE TREINADOR", "Monte o time, escale e comande a equipe.", false],
+		["PRESIDENTE / CLUBE", "Administre finanças, estrutura e o futuro do clube.", false],
+		["DIRETOR ESPORTIVO", "Negocie contratos e planeje o elenco.", false],
+		["OLHEIRO", "Observe promessas e descubra novos talentos.", false],
+		["COPAS E TORNEIOS", "Dispute competições e busque títulos.", false],
+		["SELEÇÕES NACIONAIS", "Entre em campo defendendo uma seleção.", false],
+		["MODO LENDAS", "Conheça equipes e craques históricos.", false],
+		["LOJA", "Veja moedas, recuperação e itens cosméticos.", false],
+		["ESTÁDIO", "Evolua arquibancadas e instalações.", false],
+		["PERSONALIZAÇÃO", "Visualize uniformes, chuteiras e escudos.", false],
+		["MUSEU DO CLUBE", "Relembre taças, camisas e recordes.", false],
+		["CONFIGURAÇÕES", "Escolha gráficos realistas ou otimizados.", false]
+	]
+	for item in modes:
+		var b := Button.new()
+		b.text = item[0]
+		b.custom_minimum_size = Vector2(0, 72)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 17)
+		b.pressed.connect(_on_menu_choice.bind(item[0], item[1], item[2]))
+		grid.add_child(b)
+	var footer := Label.new()
+	footer.text = "PRÉVIA • Modos ainda em desenvolvimento podem abrir telas demonstrativas. Partida rápida usa o protótipo 3D."
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	footer.add_theme_font_size_override("font_size", 14)
+	root.add_child(footer)
+
+func _on_menu_choice(mode_name: String, description: String, playable: bool) -> void:
+	if playable:
+		menu_layer.queue_free()
+		hud.visible = true
+		match_started = true
+		return
+	var overlay := PanelContainer.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.offset_left = 90
+	overlay.offset_top = 110
+	overlay.offset_right = -90
+	overlay.offset_bottom = -110
+	menu_layer.add_child(overlay)
+	var content := VBoxContainer.new()
+	content.alignment = BoxContainer.ALIGNMENT_CENTER
+	content.add_theme_constant_override("separation", 18)
+	overlay.add_child(content)
+	var heading := Label.new()
+	heading.text = mode_name
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 30)
+	content.add_child(heading)
+	var info := Label.new()
+	info.text = description + "\n\nEsta área faz parte da prévia de navegação. As funções completas serão desenvolvidas nas próximas versões. O jogo está sendo planejado para funcionar offline."
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.add_theme_font_size_override("font_size", 19)
+	content.add_child(info)
+	var back := Button.new()
+	back.text = "VOLTAR AO MENU"
+	back.custom_minimum_size = Vector2(0, 60)
+	back.pressed.connect(overlay.queue_free)
+	content.add_child(back)
 
 func mat(color: Color, roughness := 0.85) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -198,6 +300,8 @@ func set_quality(high: bool) -> void:
 	message_label.text = "GRÁFICOS: REALISTA" if high else "GRÁFICOS: OTIMIZADO"
 
 func _physics_process(delta: float) -> void:
+	if not match_started:
+		return
 	seconds += delta
 	match_time += delta
 	var mins := int(match_time) / 60
