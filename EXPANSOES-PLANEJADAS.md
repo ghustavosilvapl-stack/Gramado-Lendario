@@ -14,6 +14,17 @@ Este documento registra as expansões aprovadas para o projeto. **Estar nesta li
 8. **Sistema de torcida:** cantos, vaias, mosaicos e atmosfera dinâmica; eventos de invasão de campo não serão simulados.
 9. **Replays e melhores momentos:** rever gols, defesas e lances importantes.
 10. **Hall da Fama:** histórico dos grandes atletas, treinadores e clubes do universo salvo.
+11. **Loja do jogo:** loja interna com moedas/créditos, itens de recuperação de estamina, cosméticos e outros itens de personalização.
+
+## Loja do jogo — regras planejadas
+
+- O jogador poderá ganhar moedas jogando, cumprindo objetivos, vencendo partidas e avançando nas carreiras.
+- A loja poderá oferecer pacotes opcionais de moeda virtual e itens, incluindo recuperação de estamina; compras com dinheiro real só estarão disponíveis quando houver conexão e integração segura com a loja oficial da plataforma.
+- A loja com dinheiro real será opcional e nunca exigirá conexão para iniciar ou continuar partidas e carreiras offline.
+- Itens e moedas obtidos por progresso normal deverão continuar disponíveis offline e ser salvos localmente. Compras reais precisam de validação online; não prometer disponibilidade offline de saldo comprado que ainda não tenha sido validado ou sincronizado.
+- Exibir preços reais, conteúdo dos pacotes e confirmação antes de qualquer compra. Não realizar cobranças sem consentimento explícito.
+- Evitar vantagens obrigatórias ou abusivas: os modos principais devem continuar completos e jogáveis sem gastar dinheiro. Oferecer alternativas de progresso jogando.
+- Estamina poderá ser recuperada jogando, treinando, descansando ou usando itens da loja; balancear para não bloquear injustamente o jogador.
 
 ## Ordem sugerida de desenvolvimento
 
@@ -21,7 +32,7 @@ Este documento registra as expansões aprovadas para o projeto. **Estar nesta li
 - **Etapa 2 — Base do jogo:** menus, salvamento, elenco, personalização inicial e configurações gráficas.
 - **Etapa 3 — Carreiras e gestão:** carreira de jogador e treinador, presidente, diretor esportivo e olheiro.
 - **Etapa 4 — Conteúdo e legado:** copas, seleções, rivalidades, Lendas, Museu do Clube e Hall da Fama.
-- **Etapa 5 — Imersão:** coletivas, vida do jogador, evolução de estádio, torcida e replays.
+- **Etapa 5 — Imersão e economia:** coletivas, vida do jogador, evolução de estádio, torcida, replays, moedas, estamina e loja.
 
 ## Diretrizes mantidas
 
