@@ -1,1 +1,43 @@
+name: Build Gramado Lendario APK
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-android:
+    name: Exportar APK Android
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Verificar estrutura do projeto
+        run: |
+          test -f project.godot
+          test -f Main.tscn
+          test -f scripts/main.gd
+          test -f scripts/virtual_joystick.gd
+          test -f export_presets.cfg
+
+      - name: Importar projeto Godot
+        run: godot --headless --editor --path . --quit
+
+      - name: Exportar APK Android
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/Gramado_Lendario.apk
+          test -s build/Gramado_Lendario.apk
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gramado-Lendario-APK
+          path: build/Gramado_Lendario.apk
+          if-no-files-found: error
+          retention-days: 14
