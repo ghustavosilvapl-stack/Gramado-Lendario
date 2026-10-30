@@ -252,8 +252,8 @@ func ai_update(delta: float) -> void:
 			ball.apply_central_impulse(toward_goal * 5.0)
 	for i in range(1, teammates.size()):
 		var mate := teammates[i]
-		var home := [Vector3(-7,0,5),Vector3(7,0,5),Vector3(-5,0,-5),Vector3(5,0,-5)][i-1]
-		var delta_pos := home - mate.global_position
+		var home: Vector3 = [Vector3(-7,0,5),Vector3(7,0,5),Vector3(-5,0,-5),Vector3(5,0,-5)][i-1]
+		var delta_pos: Vector3 = home - mate.global_position
 		mate.velocity.x = clamp(delta_pos.x * 1.4, -2.0, 2.0)
 		mate.velocity.z = clamp(delta_pos.z * 1.4, -2.0, 2.0)
 		mate.velocity.y -= 22*delta
