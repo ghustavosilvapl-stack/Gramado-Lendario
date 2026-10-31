@@ -29,7 +29,7 @@ jobs:
           mkdir -p "$HOME/.android"
           keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           mkdir -p "$HOME/.config/godot"
-          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          cat > "$HOME/.config/godot/editor_settings-4.3.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
           [resource]
           export/android/android_sdk_path = "/usr/lib/android-sdk"
@@ -38,6 +38,7 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
+          cp "$HOME/.config/godot/editor_settings-4.3.tres" "$HOME/.config/godot/editor_settings-4.tres"
 
       - name: Verificar estrutura do projeto
         run: |
@@ -63,6 +64,7 @@ jobs:
           test -d "$ANDROID_HOME/build-tools/34.0.0"
           test -f "$HOME/.android/debug.keystore"
           ls -la "$HOME/.local/share/godot/export_templates/4.3.stable/"
+          ls -la "$HOME/.config/godot/"
           godot --headless --editor --path . --quit --verbose 2>&1 | tee /tmp/godot-editor.log
 
       - name: Exportar APK Android
