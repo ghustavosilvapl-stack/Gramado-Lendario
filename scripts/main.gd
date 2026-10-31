@@ -21,6 +21,9 @@ var score_label: Label
 var message_label: Label
 var menu_layer: CanvasLayer
 var match_started := false
+var cutscene_layer: CanvasLayer
+var cutscene_label: Label
+var goal_cutscene_running := false
 
 func _ready() -> void:
 	build_stadium()
@@ -28,6 +31,7 @@ func _ready() -> void:
 	build_ball()
 	build_camera()
 	build_hud()
+	build_cutscene_overlay()
 	hud.visible = false
 	set_quality(true)
 	build_main_menu()
@@ -100,7 +104,7 @@ func _on_menu_choice(mode_name: String, description: String, playable: bool) -> 
 	if playable:
 		menu_layer.queue_free()
 		hud.visible = true
-		match_started = true
+		begin_match_intro()
 		return
 	var overlay := PanelContainer.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -129,6 +133,65 @@ func _on_menu_choice(mode_name: String, description: String, playable: bool) -> 
 	back.custom_minimum_size = Vector2(0, 60)
 	back.pressed.connect(overlay.queue_free)
 	content.add_child(back)
+
+
+func build_cutscene_overlay() -> void:
+	cutscene_layer = CanvasLayer.new()
+	cutscene_layer.layer = 20
+	add_child(cutscene_layer)
+	var shade := ColorRect.new()
+	shade.color = Color(0.015, 0.025, 0.06, 0.88)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cutscene_layer.add_child(shade)
+	cutscene_label = Label.new()
+	cutscene_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cutscene_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cutscene_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	cutscene_label.add_theme_font_size_override("font_size", 42)
+	cutscene_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	cutscene_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
+	cutscene_label.add_theme_constant_override("shadow_offset_x", 3)
+	cutscene_label.add_theme_constant_override("shadow_offset_y", 3)
+	shade.add_child(cutscene_label)
+	cutscene_layer.visible = false
+
+func begin_match_intro() -> void:
+	match_started = false
+	cutscene_layer.visible = true
+	cutscene_label.text = "GRAMADO LENDÁRIO\\n\\nOS TIMES ESTÃO EM CAMPO\\n\\nA PARTIDA VAI COMEÇAR!"
+	camera.global_position = Vector3(0, 28, 34)
+	camera.look_at(Vector3(0, 0, 0), Vector3.UP)
+	var intro_tween := create_tween()
+	intro_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	intro_tween.tween_property(camera, "global_position", Vector3(0, 11, 23), 3.0)
+	await intro_tween.finished
+	cutscene_layer.visible = false
+	match_started = true
+
+func play_goal_cutscene(home_scored: bool) -> void:
+	if goal_cutscene_running:
+		return
+	goal_cutscene_running = true
+	match_started = false
+	if home_scored:
+		score_home += 1
+		cutscene_label.text = "GOOOOOOL!\\n\\nGRAMADO LENDÁRIO"
+	else:
+		score_away += 1
+		cutscene_label.text = "GOL DO ADVERSÁRIO!\\n\\nA PARTIDA CONTINUA"
+	cutscene_layer.visible = true
+	var target := ball.global_position + Vector3(0, 5, 10)
+	var goal_tween := create_tween()
+	goal_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	goal_tween.tween_property(camera, "global_position", target, 0.7)
+	await goal_tween.finished
+	await get_tree().create_timer(1.8).timeout
+	reset_ball()
+	camera.global_position = player.global_position + Vector3(0, 10, 15)
+	camera.look_at(player.global_position + Vector3(0, 0, -4), Vector3.UP)
+	cutscene_layer.visible = false
+	goal_cutscene_running = false
+	match_started = true
 
 func mat(color: Color, roughness := 0.85) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -331,7 +394,11 @@ func _physics_process(delta: float) -> void:
 	sprint_touch = false
 	ai_update(delta)
 	camera_update(delta)
-	if ball.global_position.y < -5 or abs(ball.global_position.x) > 28 or abs(ball.global_position.z) > 42:
+	if abs(ball.global_position.x) < 3.4 and ball.global_position.z < -26.5:
+		play_goal_cutscene(true)
+	elif abs(ball.global_position.x) < 3.4 and ball.global_position.z > 26.5:
+		play_goal_cutscene(false)
+	elif ball.global_position.y < -5 or abs(ball.global_position.x) > 28 or abs(ball.global_position.z) > 42:
 		reset_ball()
 
 func kick_ball(direction: Vector3, power: float) -> void:
