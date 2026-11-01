@@ -39,6 +39,30 @@ jobs:
           export/android/debug_keystore_pass = "android"
           EOF
           cp "$HOME/.config/godot/editor_settings-4.3.tres" "$HOME/.config/godot/editor_settings-4.tres"
+          # Configure the debug signing key directly in the Android export preset.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path("export_presets.cfg")
+          content = path.read_text()
+          options = content.index("[preset.0.options]")
+          before, after = content[:options], content[options:]
+          settings = {
+              "keystore/debug": str(Path.home() / ".android/debug.keystore"),
+              "keystore/debug_user": "androiddebugkey",
+              "keystore/debug_password": "android",
+              "package/signed": "true",
+          }
+          for key, value in settings.items():
+              line = f'{key}="{value}"' if key != "package/signed" else f'{key}={value}'
+              pattern = rf"(?m)^{re.escape(key)}=.*$"
+              if re.search(pattern, after):
+                  after = re.sub(pattern, lambda _: line, after, count=1)
+              else:
+                  after += "\n" + line
+          path.write_text(before + after)
+          print("Android debug signing configured in export preset.")
+          PY
 
       - name: Verificar estrutura do projeto
         run: |
@@ -76,6 +100,8 @@ jobs:
           mkdir -p build
           godot --headless --verbose --path . --export-debug "Android" build/Gramado_Lendario.apk 2>&1 | tee /tmp/godot-export.log
           test -s build/Gramado_Lendario.apk
+          file build/Gramado_Lendario.apk
+          unzip -t build/Gramado_Lendario.apk
 
       - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
