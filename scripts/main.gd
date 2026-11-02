@@ -1,441 +1,311 @@
-extends Node3D
+extends Node2D
 
-const FIELD_X := 34.0
-const FIELD_Z := 54.0
-var player: CharacterBody3D
-var ball: RigidBody3D
-var camera: Camera3D
-var hud: CanvasLayer
+# Gramado Lendário — protótipo 2D de futebol com visão superior.
+# Controles: toque em companheiro para passar; deslize para chutar;
+# toque em espaço livre para movimentar o jogador selecionado.
+
+const FIELD := Rect2(90, 55, 1100, 610)
+const CENTER := Vector2(640, 360)
+const PLAYER_RADIUS := 17.0
+const BALL_RADIUS := 8.0
+const PLAYER_SPEED := 245.0
+const BALL_FRICTION := 0.986
+
+var home := [
+    Vector2(250, 360), Vector2(390, 205), Vector2(390, 515),
+    Vector2(545, 275), Vector2(545, 445)
+]
+var away := [
+    Vector2(1030, 360), Vector2(890, 205), Vector2(890, 515),
+    Vector2(735, 275), Vector2(735, 445)
+]
+var home_velocity: Array[Vector2] = []
+var away_velocity: Array[Vector2] = []
+var selected := 0
+var ball_position := Vector2(270, 360)
+var ball_velocity := Vector2.ZERO
+var ball_owner := 0 # índice do jogador da casa; -1 livre; -2 adversário
+var away_owner := -1
+var target_position := Vector2.ZERO
+var has_target := false
+var gesture_start := Vector2.ZERO
+var gesture_current := Vector2.ZERO
+var gesture_active := false
 var score_home := 0
 var score_away := 0
-var seconds := 0.0
-var match_time := 0.0
-var move_touch := Vector2.ZERO
-var pass_requested := false
-var shoot_requested := false
-var quality_high := true
-var opponent: CharacterBody3D
-var teammates: Array[CharacterBody3D] = []
-var enemies: Array[CharacterBody3D] = []
-var score_label: Label
-var message_label: Label
-var menu_layer: CanvasLayer
-var match_started := false
-var cutscene_layer: CanvasLayer
-var cutscene_label: Label
-var goal_cutscene_running := false
+var elapsed := 0.0
+var message := "TOQUE EM UM COMPANHEIRO PARA PASSAR"
+var match_running := true
+var kickoff_timer := 0.0
 
 func _ready() -> void:
-	build_stadium()
-	build_players()
-	build_ball()
-	build_camera()
-	build_hud()
-	build_cutscene_overlay()
-	hud.visible = false
-	set_quality(true)
-	build_main_menu()
+    for i in range(home.size()):
+        home_velocity.append(Vector2.ZERO)
+        away_velocity.append(Vector2.ZERO)
+    ball_owner = 0
+    ball_position = home[0] + Vector2(18, 0)
+    queue_redraw()
 
+func _process(delta: float) -> void:
+    if not match_running:
+        return
+    elapsed += delta
+    kickoff_timer = maxf(0.0, kickoff_timer - delta)
+    _update_home(delta)
+    _update_away(delta)
+    _update_ball(delta)
+    _check_goal()
+    queue_redraw()
 
-func build_main_menu() -> void:
-	menu_layer = CanvasLayer.new()
-	menu_layer.layer = 10
-	add_child(menu_layer)
-	var bg := ColorRect.new()
-	bg.color = Color(0.025, 0.055, 0.075, 0.96)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	menu_layer.add_child(bg)
-	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 14)
-	root.add_theme_constant_override("margin_left", 34)
-	root.add_theme_constant_override("margin_right", 34)
-	root.add_theme_constant_override("margin_top", 22)
-	root.add_theme_constant_override("margin_bottom", 22)
-	menu_layer.add_child(root)
-	var title := Label.new()
-	title.text = "GRAMADO LENDÁRIO"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 42)
-	root.add_child(title)
-	var subtitle := Label.new()
-	subtitle.text = "FUTEBOL • CARREIRA • GESTÃO • SUA HISTÓRIA"
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 16)
-	root.add_child(subtitle)
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 10)
-	root.add_child(grid)
-	var modes := [
-		["PARTIDA RÁPIDA", "Jogue uma partida amistosa agora.", true],
-		["CARREIRA DE JOGADOR", "Crie seu atleta, evolua e conquiste seu espaço.", false],
-		["CARREIRA DE TREINADOR", "Monte o time, escale e comande a equipe.", false],
-		["PRESIDENTE / CLUBE", "Administre finanças, estrutura e o futuro do clube.", false],
-		["DIRETOR ESPORTIVO", "Negocie contratos e planeje o elenco.", false],
-		["OLHEIRO", "Observe promessas e descubra novos talentos.", false],
-		["COPAS E TORNEIOS", "Dispute competições e busque títulos.", false],
-		["SELEÇÕES NACIONAIS", "Entre em campo defendendo uma seleção.", false],
-		["MODO LENDAS", "Conheça equipes e craques históricos.", false],
-		["LOJA", "Veja moedas, recuperação e itens cosméticos.", false],
-		["ESTÁDIO", "Evolua arquibancadas e instalações.", false],
-		["PERSONALIZAÇÃO", "Visualize uniformes, chuteiras e escudos.", false],
-		["MUSEU DO CLUBE", "Relembre taças, camisas e recordes.", false],
-		["CONFIGURAÇÕES", "Escolha gráficos realistas ou otimizados.", false]
-	]
-	for item in modes:
-		var b := Button.new()
-		b.text = item[0]
-		b.custom_minimum_size = Vector2(0, 72)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_size_override("font_size", 17)
-		b.pressed.connect(_on_menu_choice.bind(item[0], item[1], item[2]))
-		grid.add_child(b)
-	var footer := Label.new()
-	footer.text = "PRÉVIA • Modos ainda em desenvolvimento podem abrir telas demonstrativas. Partida rápida usa o protótipo 3D."
-	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	footer.add_theme_font_size_override("font_size", 14)
-	root.add_child(footer)
+func _update_home(delta: float) -> void:
+    for i in range(home.size()):
+        var destination := _home_formation(i)
+        if i == selected and has_target and ball_owner != -2:
+            destination = target_position
+        elif ball_owner == i:
+            destination = ball_position
+        elif ball_owner == -2:
+            destination = _home_formation(i) + (ball_position - CENTER) * 0.12
+        var difference := destination - home[i]
+        var max_step := PLAYER_SPEED * delta
+        if difference.length() > 3.0:
+            var step := difference.normalized() * minf(max_step, difference.length())
+            home[i] += step
+            home_velocity[i] = step / maxf(delta, 0.001)
+        else:
+            home_velocity[i] = Vector2.ZERO
+    if ball_owner >= 0:
+        ball_position = home[ball_owner] + Vector2(18, 0)
 
-func _on_menu_choice(mode_name: String, description: String, playable: bool) -> void:
-	if playable:
-		menu_layer.queue_free()
-		hud.visible = true
-		begin_match_intro()
-		return
-	var overlay := PanelContainer.new()
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.offset_left = 90
-	overlay.offset_top = 110
-	overlay.offset_right = -90
-	overlay.offset_bottom = -110
-	menu_layer.add_child(overlay)
-	var content := VBoxContainer.new()
-	content.alignment = BoxContainer.ALIGNMENT_CENTER
-	content.add_theme_constant_override("separation", 18)
-	overlay.add_child(content)
-	var heading := Label.new()
-	heading.text = mode_name
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	heading.add_theme_font_size_override("font_size", 30)
-	content.add_child(heading)
-	var info := Label.new()
-	info.text = description + "\n\nEsta área faz parte da prévia de navegação. As funções completas serão desenvolvidas nas próximas versões. O jogo está sendo planejado para funcionar offline."
-	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.add_theme_font_size_override("font_size", 19)
-	content.add_child(info)
-	var back := Button.new()
-	back.text = "VOLTAR AO MENU"
-	back.custom_minimum_size = Vector2(0, 60)
-	back.pressed.connect(overlay.queue_free)
-	content.add_child(back)
+func _update_away(delta: float) -> void:
+    for i in range(away.size()):
+        var destination := _away_formation(i)
+        if away_owner == i:
+            destination = ball_position
+        elif ball_owner >= 0:
+            var pressure_target := ball_position + Vector2(35, 0)
+            if i == 0:
+                destination = pressure_target
+        else:
+            destination = _away_formation(i) + (ball_position - CENTER) * 0.10
+        var difference := destination - away[i]
+        var step_limit := 190.0 * delta
+        if difference.length() > 2.0:
+            var step := difference.normalized() * minf(step_limit, difference.length())
+            away[i] += step
+            away_velocity[i] = step / maxf(delta, 0.001)
+        else:
+            away_velocity[i] = Vector2.ZERO
+    if away_owner >= 0:
+        ball_position = away[away_owner] + Vector2(-18, 0)
+    elif ball_owner == -1:
+        # Adversário mais próximo tenta disputar a bola.
+        var nearest := 0
+        var nearest_distance := INF
+        for i in range(away.size()):
+            var d := away[i].distance_to(ball_position)
+            if d < nearest_distance:
+                nearest_distance = d
+                nearest = i
+        if nearest_distance < 27.0 and ball_velocity.length() < 90.0:
+            away_owner = nearest
+            ball_owner = -2
+            message = "O ADVERSÁRIO FICOU COM A BOLA!"
 
+func _update_ball(delta: float) -> void:
+    if ball_owner != -1:
+        return
+    ball_position += ball_velocity * delta
+    ball_velocity *= pow(BALL_FRICTION, delta * 60.0)
+    if ball_velocity.length() < 7.0:
+        ball_velocity = Vector2.ZERO
+    if ball_position.y < FIELD.position.y + 12 or ball_position.y > FIELD.end.y - 12:
+        ball_velocity.y *= -0.78
+        ball_position.y = clampf(ball_position.y, FIELD.position.y + 12, FIELD.end.y - 12)
+    if ball_position.x < FIELD.position.x + 10 or ball_position.x > FIELD.end.x - 10:
+        ball_velocity.x *= -0.78
+        ball_position.x = clampf(ball_position.x, FIELD.position.x + 10, FIELD.end.x - 10)
+    # Jogador da casa recupera a bola quando chega perto.
+    for i in range(home.size()):
+        if home[i].distance_to(ball_position) < 25.0 and ball_velocity.length() < 115.0:
+            ball_owner = i
+            selected = i
+            has_target = false
+            message = "VOCÊ RECUPEROU A BOLA!"
+            break
 
-func build_cutscene_overlay() -> void:
-	cutscene_layer = CanvasLayer.new()
-	cutscene_layer.layer = 20
-	add_child(cutscene_layer)
-	var shade := ColorRect.new()
-	shade.color = Color(0.015, 0.025, 0.06, 0.88)
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cutscene_layer.add_child(shade)
-	cutscene_label = Label.new()
-	cutscene_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cutscene_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cutscene_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	cutscene_label.add_theme_font_size_override("font_size", 42)
-	cutscene_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
-	cutscene_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
-	cutscene_label.add_theme_constant_override("shadow_offset_x", 3)
-	cutscene_label.add_theme_constant_override("shadow_offset_y", 3)
-	shade.add_child(cutscene_label)
-	cutscene_layer.visible = false
+func _home_formation(i: int) -> Vector2:
+    var positions := [
+        Vector2(250, 360), Vector2(390, 205), Vector2(390, 515),
+        Vector2(545, 275), Vector2(545, 445)
+    ]
+    return positions[i]
 
-func begin_match_intro() -> void:
-	match_started = false
-	cutscene_layer.visible = true
-	cutscene_label.text = "GRAMADO LENDÁRIO\\n\\nOS TIMES ESTÃO EM CAMPO\\n\\nA PARTIDA VAI COMEÇAR!"
-	camera.global_position = Vector3(0, 28, 34)
-	camera.look_at(Vector3(0, 0, 0), Vector3.UP)
-	var intro_tween := create_tween()
-	intro_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	intro_tween.tween_property(camera, "global_position", Vector3(0, 11, 23), 3.0)
-	await intro_tween.finished
-	cutscene_layer.visible = false
-	match_started = true
+func _away_formation(i: int) -> Vector2:
+    var positions := [
+        Vector2(1030, 360), Vector2(890, 205), Vector2(890, 515),
+        Vector2(735, 275), Vector2(735, 445)
+    ]
+    return positions[i]
 
-func play_goal_cutscene(home_scored: bool) -> void:
-	if goal_cutscene_running:
-		return
-	goal_cutscene_running = true
-	match_started = false
-	if home_scored:
-		score_home += 1
-		cutscene_label.text = "GOOOOOOL!\\n\\nGRAMADO LENDÁRIO"
-	else:
-		score_away += 1
-		cutscene_label.text = "GOL DO ADVERSÁRIO!\\n\\nA PARTIDA CONTINUA"
-	cutscene_layer.visible = true
-	var target := ball.global_position + Vector3(0, 5, 10)
-	var goal_tween := create_tween()
-	goal_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	goal_tween.tween_property(camera, "global_position", target, 0.7)
-	await goal_tween.finished
-	await get_tree().create_timer(1.8).timeout
-	reset_ball()
-	camera.global_position = player.global_position + Vector3(0, 10, 15)
-	camera.look_at(player.global_position + Vector3(0, 0, -4), Vector3.UP)
-	cutscene_layer.visible = false
-	goal_cutscene_running = false
-	match_started = true
+func _pass_to(index: int) -> void:
+    if ball_owner < 0:
+        return
+    var origin := ball_position
+    var destination := home[index]
+    var direction := destination - origin
+    if direction.length() < 1.0:
+        return
+    ball_owner = -1
+    away_owner = -1
+    ball_velocity = direction.normalized() * 500.0
+    selected = index
+    has_target = false
+    message = "PASSE! RECEBA A BOLA"
 
-func mat(color: Color, roughness := 0.85) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.roughness = roughness
-	return m
+func _shoot(direction: Vector2) -> void:
+    if ball_owner < 0 or direction.length() < 0.1:
+        return
+    ball_owner = -1
+    away_owner = -1
+    has_target = false
+    ball_velocity = direction.normalized() * 760.0
+    message = "CHUTE A GOL!"
 
-func box(parent: Node3D, size: Vector3, pos: Vector3, material: Material) -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	var node := MeshInstance3D.new()
-	node.mesh = mesh
-	node.material_override = material
-	node.position = pos
-	parent.add_child(node)
-	return node
+func _handle_press(position: Vector2) -> void:
+    gesture_start = position
+    gesture_current = position
+    gesture_active = true
 
-func build_stadium() -> void:
-	var grass := mat(Color(0.075, 0.38, 0.16))
-	var line := mat(Color(0.92, 0.95, 0.88))
-	var dark := mat(Color(0.10, 0.12, 0.14))
-	var stand := mat(Color(0.20, 0.24, 0.29))
-	box(self, Vector3(FIELD_X, 0.3, FIELD_Z), Vector3(0, -0.2, 0), grass)
-	box(self, Vector3(FIELD_X, 0.035, 0.12), Vector3(0, -0.025, 0), line)
-	box(self, Vector3(0.12, 0.035, FIELD_Z), Vector3(-FIELD_X/2, -0.025, 0), line)
-	box(self, Vector3(0.12, 0.035, FIELD_Z), Vector3(FIELD_X/2, -0.025, 0), line)
-	box(self, Vector3(FIELD_X, 0.035, 0.12), Vector3(0, -0.025, -FIELD_Z/2), line)
-	box(self, Vector3(FIELD_X, 0.035, 0.12), Vector3(0, -0.025, FIELD_Z/2), line)
-	var ring := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = 9.0
-	torus.outer_radius = 9.12
-	ring.mesh = torus
-	ring.material_override = line
-	ring.position.y = 0.0
-	add_child(ring)
-	box(self, Vector3(16, 0.035, 0.12), Vector3(0, -0.02, -FIELD_Z/2+11), line)
-	box(self, Vector3(16, 0.035, 0.12), Vector3(0, -0.02, FIELD_Z/2-11), line)
-	for side in [-1, 1]:
-		box(self, Vector3(FIELD_X+10, 5, 5), Vector3(0, 2.2, side*32), stand)
-		box(self, Vector3(5, 5, FIELD_Z+10), Vector3(side*22, 2.2, 0), stand)
-		box(self, Vector3(3.2, 2.5, 0.25), Vector3(0, 1.25, side*FIELD_Z/2), mat(Color(0.88,0.88,0.82)))
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	e.background_mode = Environment.BG_SKY
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.65,0.72,0.82)
-	e.ambient_light_energy = 0.7
-	env.environment = e
-	add_child(env)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, -25, 0)
-	sun.light_energy = 1.1
-	add_child(sun)
+func _handle_release(position: Vector2) -> void:
+    if not gesture_active:
+        return
+    gesture_current = position
+    gesture_active = false
+    var swipe := position - gesture_start
+    if swipe.length() > 38.0 and ball_owner >= 0:
+        _shoot(swipe)
+        return
+    # Toque em companheiro: passe direto para ele.
+    if ball_owner >= 0:
+        var nearest_index := -1
+        var nearest_distance := 48.0
+        for i in range(home.size()):
+            if i == ball_owner:
+                continue
+            var d := home[i].distance_to(position)
+            if d < nearest_distance:
+                nearest_distance = d
+                nearest_index = i
+        if nearest_index >= 0:
+            _pass_to(nearest_index)
+            return
+    # Toque em jogador da casa: seleciona para controlar.
+    for i in range(home.size()):
+        if home[i].distance_to(position) < 34.0:
+            selected = i
+            has_target = false
+            if ball_owner == -1 and home[i].distance_to(ball_position) < 42.0:
+                ball_owner = i
+            message = "JOGADOR %d SELECIONADO" % (i + 1)
+            return
+    # Toque no campo: jogador selecionado corre até o local.
+    if FIELD.has_point(position):
+        target_position = Vector2(
+            clampf(position.x, FIELD.position.x + 24, FIELD.end.x - 24),
+            clampf(position.y, FIELD.position.y + 24, FIELD.end.y - 24)
+        )
+        has_target = true
+        message = "MOVIMENTE-SE PARA RECEBER OU MARCAR"
 
-func make_player(pos: Vector3, color: Color, is_user := false) -> CharacterBody3D:
-	var body := CharacterBody3D.new()
-	body.position = pos
-	body.floor_snap_length = 0.4
-	var shape := CollisionShape3D.new()
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.48
-	capsule.height = 1.9
-	shape.shape = capsule
-	shape.position.y = 0.95
-	body.add_child(shape)
-	var torso := MeshInstance3D.new()
-	var cm := CapsuleMesh.new()
-	cm.radius = 0.48
-	cm.height = 1.9
-	torso.mesh = cm
-	torso.material_override = mat(color)
-	torso.position.y = 0.95
-	body.add_child(torso)
-	var head := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.24
-	sm.height = 0.48
-	head.mesh = sm
-	head.material_override = mat(Color(0.72,0.52,0.38))
-	head.position.y = 2.0
-	body.add_child(head)
-	add_child(body)
-	return body
+func _input(event: InputEvent) -> void:
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            _handle_press(event.position)
+        else:
+            _handle_release(event.position)
+    elif event is InputEventScreenDrag:
+        if gesture_active:
+            gesture_current = event.position
+            queue_redraw()
+    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+        if event.pressed:
+            _handle_press(event.position)
+        else:
+            _handle_release(event.position)
+    elif event is InputEventMouseMotion and gesture_active:
+        gesture_current = event.position
+        queue_redraw()
 
-func build_players() -> void:
-	player = make_player(Vector3(0,0,10), Color(0.08,0.25,0.95))
-	teammates.append(player)
-	for p in [Vector3(-7,0,5), Vector3(7,0,5), Vector3(-5,0,-5), Vector3(5,0,-5)]:
-		teammates.append(make_player(p, Color(0.08,0.25,0.95)))
-	opponent = make_player(Vector3(0,0,-8), Color(0.85,0.10,0.12))
-	enemies.append(opponent)
-	for p in [Vector3(-7,0,-4), Vector3(7,0,-4), Vector3(-5,0,9), Vector3(5,0,9)]:
-		enemies.append(make_player(p, Color(0.85,0.10,0.12)))
+func _check_goal() -> void:
+    if ball_position.x > FIELD.end.x - 5 and absf(ball_position.y - CENTER.y) < 82.0:
+        score_home += 1
+        _restart_after_goal("GOOOOOOL! GRAMADO LENDÁRIO!")
+    elif ball_position.x < FIELD.position.x + 5 and absf(ball_position.y - CENTER.y) < 82.0:
+        score_away += 1
+        _restart_after_goal("GOL DO ADVERSÁRIO!")
+        
+func _restart_after_goal(text_message: String) -> void:
+    message = text_message
+    ball_position = Vector2(270, 360)
+    ball_velocity = Vector2.ZERO
+    ball_owner = 0
+    away_owner = -1
+    selected = 0
+    has_target = false
+    home = [
+        Vector2(250, 360), Vector2(390, 205), Vector2(390, 515),
+        Vector2(545, 275), Vector2(545, 445)
+    ]
+    away = [
+        Vector2(1030, 360), Vector2(890, 205), Vector2(890, 515),
+        Vector2(735, 275), Vector2(735, 445)
+    ]
+    kickoff_timer = 1.0
 
-func build_ball() -> void:
-	ball = RigidBody3D.new()
-	ball.mass = 0.45
-	ball.linear_damp = 0.65
-	ball.angular_damp = 0.4
-	ball.position = Vector3(0,0.65,7)
-	var shape := CollisionShape3D.new()
-	var sphere := SphereShape3D.new()
-	sphere.radius = 0.32
-	shape.shape = sphere
-	ball.add_child(shape)
-	var visual := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.32
-	sm.height = 0.64
-	visual.mesh = sm
-	visual.material_override = mat(Color(0.95,0.95,0.9),0.35)
-	ball.add_child(visual)
-	add_child(ball)
+func _draw() -> void:
+    # Fundo e campo
+    draw_rect(Rect2(Vector2.ZERO, Vector2(1280, 720)), Color("#102a22"))
+    draw_rect(FIELD, Color("#287b43"))
+    for i in range(10):
+        var stripe := Rect2(FIELD.position + Vector2(i * 110, 0), Vector2(55, FIELD.size.y))
+        if i % 2 == 0:
+            draw_rect(stripe, Color(1, 1, 1, 0.035))
+    var white := Color(0.94, 0.96, 0.91)
+    draw_rect(FIELD, white, false, 4.0)
+    draw_line(Vector2(CENTER.x, FIELD.position.y), Vector2(CENTER.x, FIELD.end.y), white, 3.0)
+    draw_arc(CENTER, 82.0, 0, TAU, 80, white, 3.0)
+    draw_circle(CENTER, 5.0, white)
+    # Áreas e gols
+    draw_rect(Rect2(FIELD.position + Vector2(0, 190), Vector2(150, 230)), white, false, 3.0)
+    draw_rect(Rect2(Vector2(FIELD.end.x - 150, FIELD.position.y + 190), Vector2(150, 230)), white, false, 3.0)
+    draw_rect(Rect2(FIELD.position + Vector2(0, 260), Vector2(55, 90)), white, false, 3.0)
+    draw_rect(Rect2(Vector2(FIELD.end.x - 55, FIELD.position.y + 260), Vector2(55, 90)), white, false, 3.0)
+    draw_rect(Rect2(Vector2(FIELD.position.x - 15, CENTER.y - 70), Vector2(15, 140)), Color("#dce8e3"), false, 4.0)
+    draw_rect(Rect2(Vector2(FIELD.end.x, CENTER.y - 70), Vector2(15, 140)), Color("#dce8e3"), false, 4.0)
+    # HUD
+    draw_rect(Rect2(455, 10, 370, 38), Color(0.025, 0.08, 0.07, 0.94))
+    draw_string(ThemeDB.fallback_font, Vector2(485, 36), "CASA   %d  x  %d   VISITANTE" % [score_home, score_away], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, white)
+    draw_rect(Rect2(270, 675, 740, 32), Color(0.02, 0.06, 0.055, 0.9))
+    draw_string(ThemeDB.fallback_font, Vector2(290, 697), message, HORIZONTAL_ALIGNMENT_CENTER, 700, 17, Color("#fff1b8"))
+    draw_string(ThemeDB.fallback_font, Vector2(20, 35), "GRAMADO LENDÁRIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#f2d16b"))
+    # Jogadores visitantes e da casa
+    for i in range(away.size()):
+        _draw_player(away[i], Color("#d94343"), false, false)
+    for i in range(home.size()):
+        _draw_player(home[i], Color("#2875e8"), true, i == selected)
+    # Bola
+    draw_circle(ball_position + Vector2(2, 3), BALL_RADIUS + 1, Color(0, 0, 0, 0.28))
+    draw_circle(ball_position, BALL_RADIUS, Color("#fffdf1"))
+    draw_arc(ball_position, BALL_RADIUS - 2, 0, TAU, 20, Color("#252525"), 1.4)
+    if gesture_active and ball_owner >= 0:
+        draw_line(ball_position, gesture_current, Color("#ffe27a"), 4.0)
+        draw_circle(gesture_current, 7, Color("#ffe27a"))
 
-func build_camera() -> void:
-	camera = Camera3D.new()
-	camera.current = true
-	camera.fov = 70
-	add_child(camera)
-	camera.global_position = Vector3(0, 11, 23)
-	camera.look_at(Vector3(0,0,0), Vector3.UP)
-
-func build_hud() -> void:
-	hud = CanvasLayer.new()
-	add_child(hud)
-	var panel := PanelContainer.new()
-	panel.position = Vector2(16,14)
-	panel.size = Vector2(260,56)
-	hud.add_child(panel)
-	score_label = Label.new()
-	score_label.text = "CASA  0  x  0  VISITANTE     00:00"
-	score_label.add_theme_font_size_override("font_size",20)
-	panel.add_child(score_label)
-	message_label = Label.new()
-	message_label.text = "GRAMADO LENDÁRIO • AMISTOSO"
-	message_label.position = Vector2(16,78)
-	hud.add_child(message_label)
-	var joystick_script = load("res://scripts/virtual_joystick.gd")
-	var joystick = Control.new()
-	joystick.set_script(joystick_script)
-	joystick.position = Vector2(35, 455)
-	joystick.size = Vector2(190, 190)
-	joystick.moved.connect(func(v: Vector2): move_touch = v)
-	hud.add_child(joystick)
-	make_button("PASSE", Vector2(1050,520), func(): pass_requested = true)
-	make_button("CHUTE", Vector2(1135,440), func(): shoot_requested = true)
-	make_button("QUALIDADE", Vector2(16,650), func(): set_quality(not quality_high))
-	make_button("CORRER", Vector2(1050,610), func(): sprint_touch = true)
-
-var sprint_touch := false
-func make_button(label_text: String, pos: Vector2, callback: Callable) -> void:
-	var b := Button.new()
-	b.text = label_text
-	b.position = pos
-	b.size = Vector2(112,62)
-	b.add_theme_font_size_override("font_size",17)
-	b.pressed.connect(callback)
-	hud.add_child(b)
-
-func set_quality(high: bool) -> void:
-	quality_high = high
-	if not is_inside_tree(): return
-	if high:
-		RenderingServer.set_default_clear_color(Color(0.08,0.13,0.10))
-		Engine.max_fps = 60
-	else:
-		Engine.max_fps = 30
-	message_label.text = "GRÁFICOS: REALISTA" if high else "GRÁFICOS: OTIMIZADO"
-
-func _physics_process(delta: float) -> void:
-	if not match_started:
-		return
-	seconds += delta
-	match_time += delta
-	var mins := int(match_time) / 60
-	var secs := int(match_time) % 60
-	score_label.text = "CASA  %d  x  %d  VISITANTE     %02d:%02d" % [score_home, score_away, mins, secs]
-	var dir := Vector3.ZERO
-	dir.x = Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
-	dir.z = Input.get_action_strength("move_back") - Input.get_action_strength("move_forward")
-	if dir.length() < 0.1:
-		dir.x = move_touch.x
-		dir.z = move_touch.y
-	dir = dir.normalized()
-	var speed := 8.0 if Input.is_action_pressed("sprint") or sprint_touch else 5.5
-	player.velocity.x = dir.x * speed
-	player.velocity.z = dir.z * speed
-	player.velocity.y -= 22.0 * delta
-	player.move_and_slide()
-	if dir.length() > 0.1:
-		player.rotation.y = atan2(dir.x, dir.z)
-	var to_ball := ball.global_position - player.global_position
-	if to_ball.length() < 2.1 and (Input.is_action_just_pressed("pass_ball") or pass_requested):
-		kick_ball(Vector3(0.2,0.12,-1.0), 10.0)
-	if to_ball.length() < 2.2 and (Input.is_action_just_pressed("shoot_ball") or shoot_requested):
-		kick_ball(Vector3(0,0.16,-1), 18.0)
-	pass_requested = false
-	shoot_requested = false
-	sprint_touch = false
-	ai_update(delta)
-	camera_update(delta)
-	if abs(ball.global_position.x) < 3.4 and ball.global_position.z < -26.5:
-		play_goal_cutscene(true)
-	elif abs(ball.global_position.x) < 3.4 and ball.global_position.z > 26.5:
-		play_goal_cutscene(false)
-	elif ball.global_position.y < -5 or abs(ball.global_position.x) > 28 or abs(ball.global_position.z) > 42:
-		reset_ball()
-
-func kick_ball(direction: Vector3, power: float) -> void:
-	ball.apply_central_impulse(direction.normalized() * power)
-
-func ai_update(delta: float) -> void:
-	for i in range(enemies.size()):
-		var bot := enemies[i]
-		var target := ball.global_position if i == 0 else Vector3((i-2)*4,0,-12 + i*3)
-		var d := target - bot.global_position
-		d.y = 0
-		if d.length() > 1.2:
-			bot.velocity.x = d.normalized().x * 3.2
-			bot.velocity.z = d.normalized().z * 3.2
-		else:
-			bot.velocity.x = 0
-			bot.velocity.z = 0
-		bot.velocity.y -= 22*delta
-		bot.move_and_slide()
-		if i == 0 and (ball.global_position - bot.global_position).length() < 1.5:
-			var toward_goal := Vector3(0,0,1)
-			ball.apply_central_impulse(toward_goal * 5.0)
-	for i in range(1, teammates.size()):
-		var mate := teammates[i]
-		var home: Vector3 = [Vector3(-7,0,5),Vector3(7,0,5),Vector3(-5,0,-5),Vector3(5,0,-5)][i-1]
-		var delta_pos: Vector3 = home - mate.global_position
-		mate.velocity.x = clamp(delta_pos.x * 1.4, -2.0, 2.0)
-		mate.velocity.z = clamp(delta_pos.z * 1.4, -2.0, 2.0)
-		mate.velocity.y -= 22*delta
-		mate.move_and_slide()
-
-func camera_update(delta: float) -> void:
-	var desired := player.global_position + Vector3(0, 10, 15)
-	camera.global_position = camera.global_position.lerp(desired, 3.0 * delta)
-	camera.look_at(player.global_position + Vector3(0,0,-4), Vector3.UP)
-
-func reset_ball() -> void:
-	ball.linear_velocity = Vector3.ZERO
-	ball.angular_velocity = Vector3.ZERO
-	ball.global_position = Vector3(0,0.65,7)
+func _draw_player(pos: Vector2, color: Color, is_home: bool, is_selected: bool) -> void:
+    draw_circle(pos + Vector2(2, 4), PLAYER_RADIUS + 2, Color(0, 0, 0, 0.25))
+    draw_circle(pos, PLAYER_RADIUS + (4 if is_selected else 0), Color("#ffe16b") if is_selected else Color("#f2f2ed"))
+    draw_circle(pos, PLAYER_RADIUS - 3, color)
+    draw_circle(pos + Vector2(-4, -5), 4, Color(1, 1, 1, 0.55))
+    if is_selected:
+        draw_arc(pos, PLAYER_RADIUS + 8, 0, TAU, 36, Color("#ffe16b"), 3.0)
